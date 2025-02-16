@@ -1,0 +1,88 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+# Load dataset (Assuming CSV file)
+df = pd.read_csv('online_excel.csv')
+# Display basic info
+print(df.head())
+print(df.info())
+print("Columns in dataset:", df.columns.tolist())
+
+# Strip column names to remove leading/trailing spaces
+df.columns = df.columns.str.strip()
+
+# Handling missing values (apply median only to numeric columns)
+numeric_cols = df.select_dtypes(include=[np.number]).columns
+df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+
+# Identify categorical columns
+categorical_cols = df.select_dtypes(include=['object']).columns
+
+# Remove missing categorical columns
+categorical_cols = [col for col in categorical_cols if col in df.columns]
+
+# Apply one-hot encoding only to low-cardinality categorical columns
+low_cardinality_cols = [col for col in categorical_cols if df[col].nunique() < 50]
+df = pd.get_dummies(df, columns=low_cardinality_cols, drop_first=True)
+
+# Convert high-cardinality categorical columns to category dtype and use numeric codes
+high_cardinality_cols = [col for col in categorical_cols if col in df.columns and df[col].nunique() >= 50]
+for col in high_cardinality_cols:
+    df[col] = df[col].astype('category').cat.codes
+
+# Attempt to find 'fraud' column with possible variations
+possible_fraud_cols = [col for col in df.columns if 'fraud' in col.lower()]
+if not possible_fraud_cols:
+    raise KeyError("No column related to 'fraud' found in the dataset. Please check your data.")
+fraud_col = possible_fraud_cols[0]
+print(f"Using '{fraud_col}' as the fraud indicator column.")
+
+# Split features and target variable
+X = df.drop(columns=[fraud_col])
+y = df[fraud_col]
+
+# Split dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+# Normalize data
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Train model
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate model
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("Classification Report:\n", classification_report(y_test, y_pred))
+
+# Plot feature importance
+feature_importance = model.feature_importances_
+features = X.columns
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x=feature_importance, y=features)
+plt.xlabel("Importance")
+plt.ylabel("Features")
+plt.title("Feature Importance in Fraud Detection")
+plt.show()
+
+# Display accuracy on graph
+plt.figure(figsize=(5, 5))
+plt.bar(['Accuracy'], [accuracy], color=['blue'])
+plt.ylim(0, 1)
+plt.ylabel("Score")
+plt.title("Model Accuracy")
+plt.show()
