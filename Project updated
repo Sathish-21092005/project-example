@@ -1,0 +1,166 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.utils.class_weight import compute_sample_weight
+
+# Load dataset
+df = pd.read_excel('/content/fraud_excel.xlsx')
+
+# Display basic info
+print(df.head())
+print(df.info())
+print("Columns in dataset:", df.columns.tolist())
+
+# Strip column names to remove leading/trailing spaces
+df.columns = df.columns.str.strip()
+
+# Handling missing values (apply median only to numeric columns)
+numeric_cols = df.select_dtypes(include=[np.number]).columns
+df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+
+# Identify categorical columns
+categorical_cols = df.select_dtypes(include=['object']).columns
+
+# Remove missing categorical columns
+categorical_cols = [col for col in categorical_cols if col in df.columns]
+
+# Apply one-hot encoding only to low-cardinality categorical columns
+low_cardinality_cols = [col for col in categorical_cols if df[col].nunique() < 50]
+df = pd.get_dummies(df, columns=low_cardinality_cols, drop_first=True)
+
+# Convert high-cardinality categorical columns to category dtype and use numeric codes
+high_cardinality_cols = [col for col in categorical_cols if col in df.columns and df[col].nunique() >= 50]
+for col in high_cardinality_cols:
+    df[col] = df[col].astype('category').cat.codes
+
+# Attempt to find 'fraud' column with possible variations
+possible_fraud_cols = [col for col in df.columns if 'fraud' in col.lower()]
+if not possible_fraud_cols:
+    raise KeyError("No column related to 'fraud' found in the dataset. Please check your data.")
+fraud_col = possible_fraud_cols[0]
+print(f"Using '{fraud_col}' as the fraud indicator column.")
+
+# Split features and target variable
+X = df.drop(columns=[fraud_col])
+y = df[fraud_col]
+
+# Split dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+# Normalize data
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Handle class imbalance by using class weights (fraud is often much less frequent)
+model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
+
+# Train model
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate model
+accuracy = accuracy_score(y_test, y_pred) * 100  # Convert to percentage format
+print("Accuracy:", int(round(accuracy)))  # Display as a whole number
+
+# Display confusion matrix and classification report
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("Classification Report:\n", classification_report(y_test, y_pred))
+
+# Plot feature importance
+feature_importance = model.feature_importances_
+features = X.columns
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x=feature_importance, y=features)
+plt.xlabel("Importance")
+plt.ylabel("Features")
+plt.title("Feature Importance in Fraud Detection")
+plt.show()
+
+# Display accuracy as a whole number on graph
+plt.figure(figsize=(5, 5))
+plt.bar(['Accuracy'], [int(round(accuracy))], color=['blue'])
+plt.ylim(0, 100)
+plt.ylabel("Score")
+plt.title("Model Accuracy")
+plt.show()
+
+# Confusion Matrix Visualization
+cm = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Legitimate', 'Fraudulent'], yticklabels=['Legitimate', 'Fraudulent'])
+plt.title('Confusion Matrix')
+plt.ylabel('True label')
+plt.xlabel('Predicted label')
+plt.show()
+
+# Hyperparameter Tuning (Optional - If you want to improve the accuracy further)
+param_grid = {
+    'n_estimators': [100, 200, 300],
+    'max_depth': [10, 20, 30],
+    'min_samples_split': [2, 5, 10]
+}
+grid_search = GridSearchCV(RandomForestClassifier(random_state=42, class_weight='balanced'), param_grid, cv=3)
+grid_search.fit(X_train, y_train)
+
+# Best parameters and score from grid search
+print("Best Parameters from Grid Search:", grid_search.best_params_)
+print("Best Score from Grid Search:", int(round(grid_search.best_score_ * 100)))  # Display best score as a whole number
+
+# ===========================
+# USER INPUT FOR PREDICTION
+# ===========================
+
+print("\n===== Fraud Detection System =====")
+import numpy as np
+import pandas as pd
+
+# USER INPUT FOR PREDICTION
+try:
+    step = int(input("Enter step (transaction step/time): "))
+    name = input("Enter your name: ")  # New Feature 1
+    age = int(input("Enter your age: "))  # New Feature 2
+    transaction_type = input("Enter transaction type (e.g., CASH_OUT, PAYMENT, TRANSFER): ")
+    amount = float(input("Enter transaction amount: "))
+    oldbalanceOrg = float(input("Enter sender's old balance: "))
+    newbalanceOrig = float(input("Enter sender's new balance: "))
+    oldbalanceDest = float(input("Enter receiver's old balance: "))
+    newbalanceDest = float(input("Enter receiver's new balance: "))
+    isFlaggedFraud = int(input("Is this flagged as fraud? (1 for Yes, 0 for No): "))
+
+    # Handle transaction type encoding only if 'type' exists
+    if 'type' in df.columns:
+        transaction_type_encoded = label_encoder.transform([transaction_type])[0]
+    else:
+        transaction_type_encoded = 0  # Default value if column is missing
+
+    # Convert "name" to a numerical feature (simple hash or length)
+    name_encoded = hash(name) % 1000  # New Feature 1
+
+    # Prepare user input
+    input_data = np.array([[step, name_encoded, age, transaction_type_encoded, amount, oldbalanceOrg, newbalanceOrig, oldbalanceDest, newbalanceDest, isFlaggedFraud]])
+
+    # Ensure input has 12 features
+    while input_data.shape[1] < 12:
+        input_data = np.hstack((input_data, np.zeros((input_data.shape[0], 1))))  # Add zero columns
+
+    # Apply scaling
+    input_data = scaler.transform(input_data)  # Ensure feature count matches
+
+    # Predict fraud
+    prediction = model.predict(input_data)
+
+    # Display result
+    result = "Fraudulent Transaction" if prediction[0] == 1 else "Legitimate Transaction"
+    print("\nPrediction Result:", result)
+
+except Exception as e:
+    print("Error:", e)
