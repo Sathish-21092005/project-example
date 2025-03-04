@@ -1,0 +1,88 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import ipywidgets as widgets
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+# Load the dataset
+df = pd.read_csv("/content/Stress level dataset sathish.csv")
+
+# Convert categorical target variable to numerical
+le = LabelEncoder()
+df["Stress_Level"] = le.fit_transform(df["Stress_Level"])
+
+# Split data into features and labels
+X = df.drop("Stress_Level", axis=1)
+y = df["Stress_Level"]
+
+# Standardize features
+scaler = StandardScaler()
+X = scaler.fit_transform(X)
+
+# Split into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train Random Forest Classifier with optimized parameters
+model = RandomForestClassifier(n_estimators=300, max_depth=15, min_samples_split=3, min_samples_leaf=2, random_state=42)
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate model
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+print("Classification Report:\n", classification_report(y_test, y_pred))
+
+# Feature importance plot
+plt.figure(figsize=(8, 5))
+plt.bar(df.drop("Stress_Level", axis=1).columns, model.feature_importances_)
+plt.xlabel("Features")
+plt.ylabel("Importance")
+plt.title("Feature Importance in Stress Level Prediction")
+plt.show()
+
+# User Input for Prediction using Google Colab Forms
+def get_input(data):
+    global user_age, user_work_hours, user_sleep_hours, user_heart_rate, user_exercise, user_caffeine, user_screen_time
+    user_age = int(data[0])
+    user_work_hours = int(data[1])
+    user_sleep_hours = float(data[2])
+    user_heart_rate = int(data[3])
+    user_exercise = int(data[4])
+    user_caffeine = int(data[5])
+    user_screen_time = float(data[6])
+
+    # Prepare user input data
+    user_data = np.array([[user_age, user_work_hours, user_sleep_hours, user_heart_rate, user_exercise, user_caffeine, user_screen_time]])
+    user_data = scaler.transform(user_data)  # Scale user input
+
+    # Make prediction
+    user_pred = model.predict(user_data)
+    user_stress_level = le.inverse_transform(user_pred)[0]
+
+    print(f"\nPredicted Stress Level: {user_stress_level}")
+
+# Create input fields
+age_input = widgets.Text(description="Age:")
+work_hours_input = widgets.Text(description="Work Hours:")
+sleep_hours_input = widgets.Text(description="Sleep Hours:")
+heart_rate_input = widgets.Text(description="Heart Rate:")
+exercise_input = widgets.Text(description="Exercise Per Week:")
+caffeine_input = widgets.Text(description="Caffeine Intake:")
+screen_time_input = widgets.Text(description="Screen Time:")
+
+# Submit button
+submit_button = widgets.Button(description="Predict")
+
+# Function to handle button click
+def on_submit(_):
+    get_input([age_input.value, work_hours_input.value, sleep_hours_input.value, heart_rate_input.value, exercise_input.value, caffeine_input.value, screen_time_input.value])
+
+submit_button.on_click(on_submit)
+
+# Display input fields and button
+display(age_input, work_hours_input, sleep_hours_input, heart_rate_input, exercise_input, caffeine_input, screen_time_input, submit_button)
